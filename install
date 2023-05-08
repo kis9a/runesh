@@ -1,0 +1,6 @@
+#!/bin/sh
+
+while read -r file; do
+  curl -s "https://raw.githubusercontent.com/kis9a/runesh/main/$file" -o "$RUNESH_INSTALL_PATH/$file"
+done <<<"$(curl -sSf https://api.github.com/repos/kis9a/runesh/contents \
+  | jq -r '.[] | .name' | grep '^rune' | grep -v '\.' | grep -v '_')"

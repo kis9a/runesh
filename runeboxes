@@ -1,0 +1,396 @@
+#!/bin/bash
+
+# --- template --- {{{
+readonly cf="\\033[0m"
+readonly red="\\033[0;31m"
+readonly green="\\033[0;32m"
+readonly yellow="\\033[0;33m"
+
+err() {
+  local _date
+  _date=$(showdate)
+  echo -e "[$_date][${red}ERROR${cf}]: $1" 1>&2
+}
+
+warn() {
+  local _date
+  _date=$(showdate)
+  echo -e "[$_date][${yellow}WARNING${cf}]: $1"
+}
+
+info() {
+  local _date
+  _date=$(showdate)
+  echo -e "[$_date][INFO]: $1 "
+}
+
+succ() {
+  local _date
+  _date=$(showdate)
+  echo -e "[$_date][${green}SUCCESS${cf}]: $1"
+}
+
+showdate() {
+  local _date
+  _date=$(date +%d-%H.%M)
+  echo "$_date"
+}
+
+cleanup() {
+  info "cleanup.."
+}
+#}}}
+
+show_help() {
+  cat <<'EOF'
+
+USAGE:
+  runeboxes [options] <BOX_CHAR>
+
+OPTIONS:
+  -h: help
+  -t: test: runeboxes_test
+  -p: padding size
+  -m, --margin: margin size
+  -mx, --margin-x: horizontal margin size
+  -my, --margin-y: vertical margin size
+  -p, --padding: padding size
+  -px, --padding-x: horizontal padding size
+  -py, --padding-y: vertical padding size
+
+EXAMPLE:
+  echo apple | runeboxes @
+  echo bananaあ | runeboxes -p 3 \$
+  echo -e "\U1F4A9" | runeboxes -x 8 -y 2 金
+  fortune | cowsay -W 60 | runeboxes -x 4 $(echo -e "\U1F4A9")
+EOF
+}
+
+run_runeboxes() {
+  local in
+  local max
+  local singles
+  local frame_empties
+  local lens
+  local l
+  local i
+
+  # read stdin
+  in="$(cat -)"
+
+  # replace exception string
+  in="$(replace_exception_string "$in")"
+
+  # set max and read liens
+  while read -r l; do
+    if [[ $(runewidth "$l") -gt $max ]]; then
+      max=$(runewidth "$l")
+    fi
+    lines+=("$l")
+  done <<<"$in"
+
+  # make max to even if BOX_CHAR_RUNEWIDTH is 2
+  if [[ "$BOX_CHAR_RUNEWIDTH" -eq 2 ]]; then
+    if [[ $((max % 2)) -ne 0 ]]; then
+      max=$((max + 1))
+    fi
+  fi
+
+  singles="$((max + $((BOX_CHAR_RUNEWIDTH * 2)) + $((PADDING_X * 2))))"
+  frame_empties="$((singles - $((BOX_CHAR_RUNEWIDTH * 2))))"
+  lens="$((singles / BOX_CHAR_RUNEWIDTH))"
+
+  # top border
+  border_line "$1" "$lens"
+  new_line
+
+  # top empty frame
+  for ((i = 0; i < "$PADDING_Y"; i++)); do
+    empty_frame_line "$1" "$frame_empties"
+    new_line
+  done
+
+  # input lines
+  for l in "${lines[@]}"; do
+
+    front_padding_block "$1"
+
+    printf "%s" "$l"
+
+    repeat_char "$EMPTY_CHAR" $((max - $(runewidth "$l")))
+
+    back_padding_block "$1"
+
+    new_line
+  done
+
+  # bottom empty frame
+  for ((i = 0; i < "$PADDING_Y"; i++)); do
+    empty_frame_line "$1" "$frame_empties"
+    new_line
+  done
+
+  # bottom border
+  border_line "$1" "$lens"
+  new_line
+}
+
+repeat_char() {
+  local i
+  if [[ 0 -ne $2 ]]; then
+    for ((i = 1; i <= $2; i++)); do
+      printf "%s" "$1"
+    done
+  fi
+}
+
+replace_exception_string() {
+  # shellcheck disable=SC2001
+  printf "%s" "$1" | sed -e 's/0x0B/    /g' | # Vertical TAB
+    sed -e 's/\t/    /g' |                    # TAB
+    sed -e 's/\x08/  /g' |                    # backspace
+    sed -e 's/\x09/  /g' |                    # Horizon TAB
+    sed -e 's/\r/  /g' |                      # cr
+    sed -e 's/\x0c/  /g' |                    # form feed
+    sed -e 's/\0x7f/  /g' |                   # delete
+    sed -e 's/\x1b/  /g'                      # escape
+}
+
+empty_block() {
+  printf "%s" "$EMPTY_CHAR"
+}
+
+front_padding_block() {
+  printf "%s" "$1"
+  repeat_char "$PADDING_CHAR" "$PADDING_X"
+}
+
+back_padding_block() {
+  repeat_char "$PADDING_CHAR" "$PADDING_X"
+  printf "%s" "$1"
+}
+
+border_line() {
+  repeat_char "$1" "$2"
+}
+
+new_line() {
+  printf "\n"
+}
+
+empty_frame_line() {
+  printf "%s" "$1"
+  repeat_char ' ' "$2"
+  printf "%s" "$1"
+}
+
+wrap_margin() {
+  for ((i = 0; i < "$MARGIN_Y"; i++)); do
+    new_line
+  done
+
+  while read -r l; do
+    repeat_char "$MARGIN_CHAR" "$MARGIN_X"
+    printf "%s" "$l"
+    repeat_char "$MARGIN_CHAR" "$MARGIN_X"
+    new_line
+  done <<<"$1"
+
+  for ((i = 0; i < "$MARGIN_Y"; i++)); do
+    new_line
+  done
+}
+
+is_pipe() {
+  if [ -p /dev/stdin ]; then
+    return 0
+  elif [ -p /dev/stdout ]; then
+    return 0
+  else
+    return 1
+  fi
+}
+
+is_exists() {
+  which "$1" >/dev/null 2>&1
+  return $?
+}
+
+is_number() {
+  if [[ "$1" =~ ^[0-9]+$ ]]; then
+    return 0
+  else
+    return 1
+  fi
+}
+
+err_exit() {
+  err "$1"
+  if [[ -z "$2" ]]; then
+    exit 1
+  else
+    exit "$2"
+  fi
+}
+
+exit_health() {
+  if [[ -n "$1" ]]; then
+    info "$1"
+  fi
+  exit 0
+}
+
+exit_quit() {
+  err "quit" 1>&2
+  exit 1
+}
+
+# locale
+export LC_ALL=C
+
+# IFS
+IFS=""
+
+# trap
+trap exit_quit QUIT SIGINT
+
+# vars
+BOX_CHAR="#"
+BOX_CHAR_RUNEWIDTH=1
+PADDING_X=2
+PADDING_Y=1
+PADDING_CHAR=" "
+MARGIN_X=0
+MARGIN_Y=0
+MARGIN_CHAR=" "
+EMPTY_CHAR=" "
+TEST_FILE="./runeboxes_test"
+
+## error code
+ERR_CODE_INVALID_OPTION=3
+ERR_CODE_INVALID_ARGUMENTS=4
+ERR_CODE_INVALID_BOX_CHAR_WIDTH=5
+ERR_CODE_INVALID_INPUT=6
+ERR_CODE_NOT_FOUND_RUNEWIDTH=7
+ERR_CODE_NOT_FOUND_TESTFILE=8
+
+# flag option cases
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -h | --help)
+      show_help
+      exit_health ""
+      ;;
+    -t | --test)
+      if [ -f "$TEST_FILE" ]; then
+        info "start testing"
+        # shellcheck disable=SC1090
+        . "$TEST_FILE"
+        info "end testing"
+      else
+        err_exit "$TEST_FILE file is not found" "$ERR_CODE_NOT_FOUND_TESTFILE"
+      fi
+      exit_health ""
+      shift
+      shift
+      ;;
+    -p | --padding)
+      if is_number "$2"; then
+        PADDING_X="$2"
+        PADDING_Y="$2"
+      else
+        err_exit "--padding option argument is expected the number" "$ERR_CODE_INVALID_OPTION"
+      fi
+      shift
+      shift
+      ;;
+    -px | --padding-x)
+      if is_number "$2"; then
+        PADDING_X="$2"
+      else
+        err_exit "--padding-x option argument is expected the number" "$ERR_CODE_INVALID_OPTION"
+      fi
+      shift
+      shift
+      ;;
+    -py | --padding-y)
+      if is_number "$2"; then
+        PADDING_Y="$2"
+      else
+        err_exit "--padding-y option argument is expected the number" "$ERR_CODE_INVALID_OPTION"
+      fi
+      shift
+      shift
+      ;;
+    -m | --margin)
+      if is_number "$2"; then
+        MARGIN_X="$2"
+        MARGIN_Y="$2"
+      else
+        err_exit "--margin option argument is expected the number" "$ERR_CODE_INVALID_OPTION"
+      fi
+      shift
+      shift
+      ;;
+    -mx | --margin-x)
+      if is_number "$2"; then
+        MARGIN_X="$2"
+      else
+        err_exit "--margin-x option argument is expected the number" "$ERR_CODE_INVALID_OPTION"
+      fi
+      shift
+      shift
+      ;;
+    -my | --margin-y)
+      if is_number "$2"; then
+        MARGIN_Y="$2"
+      else
+        err_exit "--margin-y option argument is expected the number" "$ERR_CODE_INVALID_OPTION"
+      fi
+      shift
+      shift
+      ;;
+    -b | --border)
+      if [[ -$(runewidth "$2") -lt 3 ]]; then
+        BOX_CHAR="$2"
+      else
+        err_exit "--border option argument is expected the number" "$ERR_CODE_INVALID_OPTION"
+      fi
+      shift
+      shift
+      ;;
+    -* | --*)
+      err_exit "Invalid option" "$ERR_CODE_INVALID_OPTION"
+      break
+      ;;
+    *)
+      POSITIONAL_ARGS+=("$1")
+      shift
+      ;;
+  esac
+done
+
+# restore positional parameters
+set -- "${POSITIONAL_ARGS[@]}"
+
+if [[ -z "$1" ]]; then
+  BOX_CHAR="#"
+else
+  BOX_CHAR="$1"
+fi
+
+# fix box char runewidth
+BOX_CHAR_RUNEWIDTH="$(runewidth "$BOX_CHAR")"
+
+# run
+if [[ -z "$BOX_CHAR" ]]; then
+  err_exit "Argument is required" "$ERR_CODE_INVALID_ARGUMENTS"
+elif [[ "$BOX_CHAR_RUNEWIDTH" -gt 2 ]]; then
+  err_exit "String is over 2 runewidth" "$ERR_CODE_INVALID_BOX_CHAR_WIDTH"
+elif ! is_pipe; then
+  err_exit "Pipe input is requird" "$ERR_CODE_INVALID_INPUT"
+elif ! is_exists "runewidth"; then
+  err_exit "Command not found: runewidth" "$ERR_CODE_NOT_FOUND_RUNEWIDTH"
+else
+  wrap_margin "$(run_runeboxes "$BOX_CHAR")"
+fi

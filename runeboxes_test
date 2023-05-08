@@ -1,0 +1,165 @@
+#!/bin/bash
+# expected $(source) by ./runeboxes
+
+# helper
+assert_equal() {
+  if [ "$1" != "$2" ]; then
+    echo "expected: $1"
+    echo "actual:   $2"
+    return 1
+  fi
+}
+
+assert_range() {
+  if [ "$1" -lt "$2" ]; then
+    echo "expected: $1"
+    echo "greater than: $2"
+    return 1
+  fi
+  if [ "$1" -gt "$3" ]; then
+    echo "expected: $1"
+    echo "less than: $3"
+    return 1
+  fi
+}
+
+is_diff() {
+  if [[ -z "$(diff <(echo "$1") <(echo "$2"))" ]]; then
+    return 1
+  else
+    return 0
+  fi
+}
+
+test_err() {
+  echo -e "${red}❌${cf} $1" 1>&2
+}
+
+test_suc() {
+  echo -e "${green}✓ ${cf} $1" 1>&2
+}
+
+# test
+testing_run() {
+  # test repeat char
+  test_repeat_char "A" 8 "AAAAAAAA"
+  test_repeat_char "漢" 6 "漢漢漢漢漢漢"
+
+  # test run_runeboxes
+  ## first
+  PADDING_X=2
+  PADDING_Y=1
+  BOX_CHAR="#"
+  BOX_CHAR_RUNEWIDTH="$(runewidth "$BOX_CHAR")"
+  test_run_runeboxes "$(echo "test_run_runeboxes" | run_runeboxes "$BOX_CHAR")" "$(
+    cat <<EOF
+########################
+#                      #
+#  test_run_runeboxes  #
+#                      #
+########################
+EOF
+  )"
+
+  ## multiple line input
+  PADDING_X=6
+  PADDING_Y=2
+  BOX_CHAR="@"
+  BOX_CHAR_RUNEWIDTH="$(runewidth "$BOX_CHAR")"
+  test_run_runeboxes "$(echo -e "test_run_runeboxes\nmultiple line input" | run_runeboxes "$BOX_CHAR")" "$(
+    cat <<EOF
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@                               @
+@                               @
+@      test_run_runeboxes       @
+@      multiple line input      @
+@                               @
+@                               @
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+EOF
+  )"
+
+  ## BOX_CHAR fullwidth
+  PADDING_X=1
+  PADDING_Y=1
+  BOX_CHAR="全"
+  BOX_CHAR_RUNEWIDTH="$(runewidth "$BOX_CHAR")"
+  test_run_runeboxes "$(echo -e "test_run_runeboxes fullwidth box char" | run_runeboxes "$BOX_CHAR")" "$(
+    cat <<EOF
+全全全全全全全全全全全全全全全全全全全全全全
+全                                        全
+全 test_run_runeboxes fullwidth box char  全
+全                                        全
+全全全全全全全全全全全全全全全全全全全全全全
+EOF
+  )"
+
+  ## mixed string width
+  ## BOX_CHAR fullwidth
+  PADDING_X=1
+  PADDING_Y=1
+  BOX_CHAR="💩"
+  BOX_CHAR_RUNEWIDTH="$(runewidth "$BOX_CHAR")"
+  test_run_runeboxes "$(echo -e "test_run_runeboxes\nmixed width \n🍎🍎" | run_runeboxes "$BOX_CHAR")" "$(
+    cat <<EOF
+💩💩💩💩💩💩💩💩💩💩💩💩
+💩                    💩
+💩 test_run_runeboxes 💩
+💩 mixed width        💩
+💩 🍎🍎               💩
+💩                    💩
+💩💩💩💩💩💩💩💩💩💩💩💩
+EOF
+  )"
+
+  ## tab input
+  PADDING_X=1
+  PADDING_Y=1
+  BOX_CHAR="za"
+  BOX_CHAR_RUNEWIDTH="$(runewidth "$BOX_CHAR")"
+  test_run_runeboxes "$(echo -e "test_run_runeboxes\ntab \tinput \n🍎\t🍎" | run_runeboxes "$BOX_CHAR")" "$(
+    cat <<EOF
+zazazazazazazazazazazaza
+za                    za
+za test_run_runeboxes za
+za tab     input      za
+za 🍎    🍎           za
+za                    za
+zazazazazazazazazazazaza
+EOF
+  )"
+
+  ## zalgo
+  PADDING_X=1
+  PADDING_Y=1
+  BOX_CHAR="66"
+  BOX_CHAR_RUNEWIDTH="$(runewidth "$BOX_CHAR")"
+  test_run_runeboxes "$(echo -e "z͙͑̈͏͙ă̺ͫl̜͕̈́̓͜g̳o̳ͫ̎͆,̞ͮ͂̂͞ ̎͢heͦ ̞̺͖̓͆ĉ̗̿̉ó̇́̈m͉̗̏ͯ̊e̩̿ͯͩs̰͑" | run_runeboxes "$BOX_CHAR")" "$(
+    cat <<EOF
+6666666666666666666666
+66                  66
+66 z͙͑̈͏͙ă̺ͫl̜͕̈́̓͜g̳o̳ͫ̎͆,̞ͮ͂̂͞ ̎͢heͦ ̞̺͖̓͆ĉ̗̿̉ó̇́̈m͉̗̏ͯ̊e̩̿ͯͩs̰͑  66
+66                  66
+6666666666666666666666
+EOF
+  )"
+}
+
+test_repeat_char() {
+  if assert_equal "$(repeat_char "$1" "$2")" "$3"; then
+    test_suc "test_repeat_char: $1"
+  else
+    test_err "test_repeat_char: failed $1"
+  fi
+}
+
+test_run_runeboxes() {
+  if is_diff "$1" "$2"; then
+    test_err "test_run_runeboxes: failed:\n$1"
+    echo -e "expected:\n$2"
+  else
+    test_suc "test_run_runeboxes:\n$1"
+  fi
+}
+
+testing_run "$@"

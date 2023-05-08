@@ -1,0 +1,235 @@
+#!/bin/bash
+# expected $(source) by ./runeflex
+
+# helper
+assert_equal() {
+  if [ "$1" != "$2" ]; then
+    echo "expected: $1"
+    echo "actual:   $2"
+    return 1
+  fi
+}
+
+assert_range() {
+  if [ "$1" -lt "$2" ]; then
+    echo "expected: $1"
+    echo "greater than: $2"
+    return 1
+  fi
+  if [ "$1" -gt "$3" ]; then
+    echo "expected: $1"
+    echo "less than: $3"
+    return 1
+  fi
+}
+
+is_diff() {
+  if [[ -z "$(diff <(echo "$1") <(echo "$2"))" ]]; then
+    return 1
+  else
+    return 0
+  fi
+}
+
+test_err() {
+  echo -e "${red}❌${cf} $1" 1>&2
+}
+
+test_suc() {
+  echo -e "${green}✓ ${cf} $1" 1>&2
+}
+
+# test
+testing_run() {
+  # test run_runeflex
+  ## gap case
+  ## runeflex -px 2 <(echo -e "ad\nde") <(echo -e "fg\nhi\njk")
+  PADDING_X=1
+  PADDING_Y=1
+  MARGIN_X=0
+  MARGIN_Y=0
+  BORDER_CHAR=""
+  PADDING_CHAR=" "
+  GAP_CHAR=" "
+  GAP=1
+  EMPTY_CHAR=" "
+  BORDER_CHAR_RUNEWIDTH=0
+  test_run_runeflex "$(run_runeflex <(echo -e "ad\nde") <(echo -e "fg\nhi\njk"))" "$(
+    cat <<EOF
+ad fg
+de hi
+   jk
+EOF
+  )"
+
+  ## gap case with margin
+  ## runeflex -px 5 -mx 5 -my 4 <(echo -e "ad\nde") <(echo -e "fg\nhi\njk")
+  PADDING_X=2
+  PADDING_Y=2
+  MARGIN_X=5
+  MARGIN_Y=4
+  BORDER_CHAR=""
+  PADDING_CHAR=" "
+  GAP_CHAR=" "
+  GAP=1
+  EMPTY_CHAR=" "
+  BORDER_CHAR_RUNEWIDTH=0
+  test_run_runeflex "$(run_runeflex <(echo -e "ad\nde") <(echo -e "fg\nhi\njk"))" "$(
+    cat <<EOF
+
+
+
+
+     ad fg
+     de hi
+        jk
+
+
+
+
+
+EOF
+  )"
+
+  ## gap case
+  ## runeflex -g 4 -py 3 -px 1 -m 0 <(echo -e "ea\nde") <(echo -e "fg\nhi\njkl") <(echo -e "fg\nhiか\njkl") <(echo -e "fg\nhi\njkl") <(echo -e "fg\nhi\nijあl")
+  PADDING_X=2
+  PADDING_Y=2
+  MARGIN_X=0
+  MARGIN_Y=0
+  BORDER_CHAR=""
+  PADDING_CHAR=" "
+  GAP_CHAR=" "
+  GAP=4
+  EMPTY_CHAR=" "
+  BORDER_CHAR_RUNEWIDTH=0
+  test_run_runeflex "$(run_runeflex <(echo -e "ea\nde") <(echo -e "fg\nhi\njkl") <(echo -e "fg\nhiか\njkl") <(echo -e "fg\nhi\njkl") <(echo -e "fg\nhi\nijあl"))" "$(
+    cat <<EOF
+ea    fg     fg      fg     fg
+de    hi     hiか    hi     hi
+      jkl    jkl     jkl    ijあl
+EOF
+  )"
+
+  ## border case
+  ## runeflex -b @ -g 12 -px 4 -py 2 <(echo "ad\nde") <(echo "fg\nhi\njk")
+  PADDING_X=4
+  PADDING_Y=2
+  MARGIN_X=0
+  MARGIN_Y=0
+  BORDER_CHAR="@"
+  PADDING_CHAR=" "
+  GAP_CHAR=" "
+  GAP=12
+  EMPTY_CHAR=" "
+  BORDER_CHAR_RUNEWIDTH=1
+  test_run_runeflex "$(run_runeflex <(echo -e "ad\nde") <(echo -e "fg\nhi\njk"))" "$(
+    cat <<EOF
+@@@@@@@@@@@@@@@@@@@@@@@
+@          @          @
+@          @          @
+@    ad    @    fg    @
+@    de    @    hi    @
+@          @    jk    @
+@          @          @
+@          @          @
+@@@@@@@@@@@@@@@@@@@@@@@
+EOF
+  )"
+
+  ## border case with margin
+  ## runeflex -b @ -px 5 -mx 5 -my 2 -my 4 <(echo -e "ad\nde") <(echo -e "fg\nhi\njk")
+  PADDING_X=5
+  PADDING_Y=1
+  MARGIN_X=5
+  MARGIN_Y=4
+  BORDER_CHAR="#"
+  PADDING_CHAR=" "
+  GAP_CHAR=" "
+  GAP=12
+  EMPTY_CHAR=" "
+  BORDER_CHAR_RUNEWIDTH=1
+  test_run_runeflex "$(run_runeflex <(echo -e "ad\nde") <(echo -e "fg\nhi\njk"))" "$(
+    cat <<EOF
+
+
+
+
+     ###########################
+     #            #            #
+     #     ad     #     fg     #
+     #     de     #     hi     #
+     #            #     jk     #
+     #            #            #
+     ###########################
+
+
+
+
+
+EOF
+  )"
+
+  ## border case with mixed 2 width string
+  ## runeflex -b A -py 1 -px 1 -mx 0 -my 1 <(echo -e "ea\nde") <(echo -e "fg\nhi\njkl") <(echo -e "fg\nhiか\njkl") <(echo -e "fg\nhi\njkl") <(echo -e "fg\nhi\nijあl")
+  PADDING_X=1
+  PADDING_Y=1
+  MARGIN_X=0
+  MARGIN_Y=1
+  BORDER_CHAR="A"
+  PADDING_CHAR=" "
+  GAP_CHAR=" "
+  GAP=1
+  EMPTY_CHAR=" "
+  BORDER_CHAR_RUNEWIDTH=1
+  test_run_runeflex "$(run_runeflex <(echo -e "ea\nde") <(echo -e "fg\nhi\njkl") <(echo -e "fg\nhiか\njkl") <(echo -e "fg\nhi\njkl") <(echo -e "fg\nhi\nijあl"))" "$(
+    cat <<EOF
+
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+A    A     A      A     A       A
+A ea A fg  A fg   A fg  A fg    A
+A de A hi  A hiか A hi  A hi    A
+A    A jkl A jkl  A jkl A ijあl A
+A    A     A      A     A       A
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+
+EOF
+  )"
+
+  ## border case with 2 width border char
+  ## runeflex -b あ -p 1 -mx 0 -my 1 <(echo -e "ea\nde") <(echo -e "fg\nhi\njkl") <(echo -e "fg\nhiか\njkl") <(echo -e "fg\nhi\njkl") <(echo -e "fg\nhi\nijあl")
+  PADDING_X=1
+  PADDING_Y=1
+  MARGIN_X=0
+  MARGIN_Y=1
+  BORDER_CHAR="あ"
+  PADDING_CHAR=" "
+  GAP_CHAR=" "
+  GAP=1
+  EMPTY_CHAR=" "
+  BORDER_CHAR_RUNEWIDTH=2
+  test_run_runeflex "$(run_runeflex <(echo -e "ea\nde") <(echo -e "fg\nhi\njkl") <(echo -e "fg\nhiか\njkl") <(echo -e "fg\nhi\njkl") <(echo -e "fg\nhi\nijあl"))" "$(
+    cat <<EOF
+
+あああああああああああああああああああああ
+あ    あ      あ      あ      あ        あ
+あ ea あ fg   あ fg   あ fg   あ fg     あ
+あ de あ hi   あ hiか あ hi   あ hi     あ
+あ    あ jkl  あ jkl  あ jkl  あ ijあl  あ
+あ    あ      あ      あ      あ        あ
+あああああああああああああああああああああ
+
+EOF
+  )"
+}
+
+test_run_runeflex() {
+  if is_diff "$1" "$2"; then
+    test_err "test_run_runeflex: failed:\n$1"
+    echo -e "expected:\n$2"
+  else
+    test_suc "test_run_runeflex:\n$1"
+  fi
+}
+
+testing_run "$@"
